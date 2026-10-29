@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>Password required</title>
+<link rel="icon" href="/babevote/favicon.svg" type="image/svg+xml">
+<style>
+:root{--bg:#d1bfff;--ink:#2b1a5a;--card:#fff;--line:#bba6f0;--btn:#2b1a5a;--btnink:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1236;--ink:#f1eaff;--card:#2a1d4d;--line:#4a3a80;--btn:#d1bfff;--btnink:#1c1236}}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+form{width:min(420px,calc(100vw - 32px));background:var(--card);border:2px solid var(--ink);border-radius:16px;padding:28px 24px;box-shadow:6px 6px 0 var(--ink)}
+h1{font-size:22px;margin:0 0 6px;letter-spacing:.02em}p{margin:0 0 16px}.small{font-size:14px;opacity:.8}
+input{width:100%;font:inherit;padding:11px 12px;border:2px solid var(--line);border-radius:10px;background:transparent;color:inherit}
+button{margin-top:12px;width:100%;font:inherit;font-weight:700;padding:11px 14px;border:0;border-radius:10px;background:var(--btn);color:var(--btnink);cursor:pointer}
+button:disabled{opacity:.6;cursor:default}#err{color:#b0123c;min-height:1.4em;margin:10px 0 0;font-weight:600}
+@media (prefers-color-scheme:dark){#err{color:#ff8aa5}}
+</style></head>
+<body data-blob="/babevote/_e/p/207fc064cdae96f2.bin" data-base="/babevote">
+<form id="f" hidden>
+  <h1>BABE VOTE &middot; staging</h1>
+  <p>This is a private staging copy of the BABE VOTE website. Enter the password to continue.</p>
+  <label for="p" class="small">Password</label>
+  <input id="p" type="password" autocomplete="current-password" required>
+  <button id="go" type="submit">Unlock</button>
+  <p id="err" role="alert"></p>
+</form>
+<noscript><p style="padding:24px">This page needs JavaScript to unlock.</p></noscript>
+<script>
+(function () {
+  var B = document.body.dataset.base, blobUrl = document.body.dataset.blob, K = 'bv_key';
+  var f = document.getElementById('f'), err = document.getElementById('err'), go = document.getElementById('go');
+  var b64 = function (s) { return Uint8Array.from(atob(s), function (c) { return c.charCodeAt(0); }); };
+  var unb64 = function (u) { var s = ''; u.forEach(function (x) { s += String.fromCharCode(x); }); return btoa(s); };
+  var meta;
+  function loadMeta() { return meta ? Promise.resolve(meta) : fetch(B + '/_e/meta.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (m) { meta = m; return m; }); }
+  function importRaw(raw) { return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']); }
+  function decrypt(key, buf) { return crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12)); }
+  function fetchBuf(u) { return fetch(u).then(function (r) { if (!r.ok) throw new Error('missing'); return r.arrayBuffer(); }); }
+  function derive(pw, m) {
+    return crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']).then(function (k) {
+      return crypto.subtle.deriveBits({ name: 'PBKDF2', salt: b64(m.salt), iterations: m.iter, hash: 'SHA-256' }, k, 256);
+    });
+  }
+  function show(html, key) {
+    window.__bvKey = key;
+    document.open(); document.write(html); document.close();
+    var run = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('img[data-e]'), function (im) {
+        fetchBuf(im.dataset.e).then(function (b) { return decrypt(key, b); }).then(function (pt) {
+          im.src = URL.createObjectURL(new Blob([pt], { type: im.dataset.t }));
+        }).catch(function () {});
+      });
+      if (location.hash) { var t = document.getElementById(decodeURIComponent(location.hash.slice(1))); if (t) t.scrollIntoView(); }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+  }
+  function unlock(rawKey) {
+    return importRaw(rawKey).then(function (key) {
+      return fetchBuf(blobUrl).then(function (b) { return decrypt(key, b); }).then(function (pt) {
+        try { sessionStorage.setItem(K, unb64(new Uint8Array(rawKey))); } catch (e) {}
+        show(new TextDecoder().decode(pt), key);
+      });
+    });
+  }
+  function ask() { f.hidden = false; document.getElementById('p').focus(); }
+  if (document.body.dataset.missing || !blobUrl) { ask(); f.querySelector('p').textContent = 'That page was not found. Enter the password to go back to the site.'; f.addEventListener('submit', function (e) { e.preventDefault(); location.href = B + '/'; }); return; }
+  loadMeta().then(function (m) {
+    var saved = null; try { saved = sessionStorage.getItem(K); } catch (e) {}
+    if (saved) return unlock(b64(saved)).catch(function () { try { sessionStorage.removeItem(K); } catch (e) {} ask(); });
+    ask();
+  }).catch(function () { ask(); err.textContent = 'Could not load. Check your connection and refresh.'; });
+  f.addEventListener('submit', function (e) {
+    e.preventDefault(); if (f.dataset.busy) return; f.dataset.busy = 1; go.disabled = true; err.textContent = '';
+    loadMeta().then(function (m) { return derive(document.getElementById('p').value, m); })
+      .then(function (raw) { return unlock(raw); })
+      .catch(function () { err.textContent = 'That password is not right.'; go.disabled = false; delete f.dataset.busy; });
+  });
+})();
+</script>
+</body></html>

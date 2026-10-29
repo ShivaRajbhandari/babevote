@@ -1,0 +1,163 @@
+backend:
+  name: github
+  repo: ShivaRajbhandari/babevote-source
+  branch: main
+  base_url: https://babevote-login.shiva-a-rajbhandari.workers.dev   # GitHub login helper for this site (Cloudflare Worker, requests repo scope)
+  auth_endpoint: auth
+  auth_scope: repo   # the source repo is private
+  commit_messages:
+    create: "Add {{collection}} “{{slug}}”"
+    update: "Update {{collection}} “{{slug}}”"
+    delete: "Delete {{collection}} “{{slug}}”"
+publish_mode: simple
+media_folder: static/uploads
+public_folder: /uploads
+site_url: https://www.shivarajbhandari.com/babevote
+display_url: https://www.shivarajbhandari.com/babevote
+locale: en
+
+collections:
+  - name: blog
+    label: Blog posts
+    label_singular: Blog post
+    folder: content/blog
+    extension: md
+    format: frontmatter
+    create: true
+    slug: "{{slug}}"
+    identifier_field: title
+    sortable_fields: [date, title]
+    summary: "{{title}} — {{author}}"
+    fields:
+      - {label: Title, name: title, widget: string}
+      - {label: "Web address ending (lowercase words with dashes, e.g. my-new-post)", name: slug, widget: string, pattern: ['^[a-z0-9-]+$', 'Use lowercase letters, numbers and dashes only']}
+      - {label: Publish date, name: date, widget: datetime, format: "YYYY-MM-DDTHH:mm:ss.000[Z]", date_format: "MMMM D, YYYY", time_format: "h:mm A", picker_utc: true}
+      - {label: Author, name: author, widget: string}
+      - {label: Short summary (shown on the blog list), name: description, widget: text}
+      - {label: Cover image, name: cover, widget: image, required: false}
+      - {label: "Draft (hidden from the site while on)", name: draft, widget: boolean, default: false}
+      - {label: Post, name: body, widget: markdown}
+
+  - name: people
+    label: Board & campus captains
+    files:
+      - label: People page
+        name: people
+        file: content/people.json
+        format: json
+        fields:
+          - {label: Intro line, name: intro, widget: string, required: false}
+          - label: Groups
+            label_singular: Group
+            name: groups
+            widget: list
+            summary: "{{fields.title}}"
+            fields:
+              - {label: "Group title (e.g. Board of Directors, Campus Captains — High Schools)", name: title, widget: string}
+              - label: People
+                label_singular: Person
+                name: people
+                widget: list
+                summary: "{{fields.name}} — {{fields.detail}}"
+                fields:
+                  - {label: Name, name: name, widget: string}
+                  - {label: "Role (e.g. President, Campus Vice-Captain)", name: role, widget: string, required: false}
+                  - {label: "School or title line (e.g. Rocky Mountain High School, Board Member)", name: detail, widget: string, required: false}
+                  - {label: Photo (square works best), name: photo, widget: image, required: false}
+              - label: "Not pictured (name + school, shown as a text list)"
+                label_singular: Person
+                name: not_pictured
+                widget: list
+                required: false
+                summary: "{{fields.name}}"
+                fields:
+                  - {label: Name, name: name, widget: string}
+                  - {label: School or title, name: detail, widget: string, required: false}
+
+  - name: press
+    label: Press
+    files:
+      - label: Press page
+        name: press
+        file: content/press.json
+        format: json
+        fields:
+          - label: Years
+            label_singular: Year
+            name: years
+            widget: list
+            summary: "{{fields.year}}"
+            fields:
+              - {label: Year, name: year, widget: string}
+              - label: Stories
+                label_singular: Story
+                name: items
+                widget: list
+                summary: "{{fields.outlet}} — {{fields.headline}}"
+                fields:
+                  - {label: Headline, name: headline, widget: string}
+                  - {label: Outlet (e.g. Idaho Capital Sun), name: outlet, widget: string}
+                  - {label: "Date (as shown, e.g. October 15, 2026)", name: date, widget: string}
+                  - {label: Link to the story, name: url, widget: string}
+                  - {label: Thumbnail image, name: thumb, widget: image, required: false}
+
+  - name: history
+    label: History
+    files:
+      - label: History timeline
+        name: history
+        file: content/history.json
+        format: json
+        fields:
+          - {label: Section title, name: title, widget: string}
+          - label: Timeline
+            label_singular: Period
+            name: eras
+            widget: list
+            summary: "{{fields.when}}"
+            fields:
+              - {label: "When (e.g. 2017, 2018 – 2022, NOW!)", name: when, widget: string}
+              - label: Entries
+                label_singular: Entry
+                name: entries
+                widget: list
+                fields:
+                  - {label: "Text (use [words](https://link) for links)", name: text, widget: text}
+
+  - name: pages
+    label: New pages
+    label_singular: Page
+    folder: content/pages
+    extension: md
+    format: frontmatter
+    create: true
+    filter: {field: builtin, value: false}
+    slug: "{{slug}}"
+    identifier_field: title
+    summary: "{{title}}"
+    fields:
+      - {label: Title, name: title, widget: string}
+      - {label: "Web address ending (lowercase words with dashes, e.g. our-partners)", name: slug, widget: string, pattern: ['^[a-z0-9-]+$', 'Use lowercase letters, numbers and dashes only']}
+      - {label: Short line under the title, name: description, widget: string, required: false}
+      - {label: Show in the top menu, name: show_in_nav, widget: boolean, default: false}
+      - {label: Menu label (if different from the title), name: nav_label, widget: string, required: false}
+      - {name: builtin, widget: hidden, default: false}
+      - {label: Page, name: body, widget: markdown}
+
+  - name: builtin_pages
+    label: Other pages (advanced HTML)
+    label_singular: Page
+    folder: content/pages
+    extension: html
+    format: frontmatter
+    create: false
+    delete: false
+    filter: {field: builtin, value: true}
+    identifier_field: title
+    summary: "{{title}}"
+    fields:
+      - {label: Title, name: title, widget: string}
+      - {label: Web address ending, name: slug, widget: string}
+      - {label: Search description, name: description, widget: string, required: false}
+      - {name: builtin, widget: hidden, default: true}
+      - {label: "Page HTML (home, join-us, photos, feed, privacy, terms, and the top/bottom of About, People, Press, Blog). Edit text between tags; leave tags alone unless you know HTML.", name: body, widget: text}

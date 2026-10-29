@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Invite editors</title>
+<style>
+:root{--ink:#14213d;--muted:#58627a;--line:#d8dce6;--bg:#f5f6fa;--card:#fff;--accent:#2445f0;--bad:#b0123c;--good:#0a7a43}
+@media (prefers-color-scheme:dark){:root{--ink:#eef0f7;--muted:#a3abc2;--line:#2c3550;--bg:#0f1526;--card:#171f36;--accent:#7f95ff;--bad:#ff8aa5;--good:#62d69b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:28px 18px 64px}a{color:var(--accent)}
+h1{font-size:26px;margin:6px 0 4px}h2{font-size:18px;margin:0 0 10px}p{margin:0 0 12px}.muted{color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:18px 0}
+label{display:block;font-weight:600;margin:12px 0 4px}input{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:inherit}
+button,.btn{font:inherit;font-weight:600;border:0;border-radius:10px;padding:10px 16px;background:var(--accent);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}
+button.ghost{background:transparent;color:var(--bad);border:1px solid var(--line);padding:6px 10px;font-size:14px}
+button:disabled{opacity:.5;cursor:default}
+ul{list-style:none;margin:0;padding:0}li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}li:first-child{border-top:0}
+.msg{margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid var(--line)}.msg.ok{border-color:var(--good)}.msg.err{border-color:var(--bad);color:var(--bad)}
+.tag{font-size:12px;border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--muted);margin-left:8px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+</style></head><body>
+<main>
+  <p><a href="/babevote/admin/">&larr; Back to the editor</a></p>
+  <h1>Invite editors</h1>
+  <p class="muted" id="site">Loading…</p>
+  <div id="gate" class="card" hidden></div>
+  <div id="app" hidden>
+    <div class="card">
+      <h2>Invite someone</h2>
+      <p class="muted">Enter their GitHub username. GitHub emails them an invitation, and once they accept they can sign in at the editor and change the site. They need a free GitHub account (github.com/signup). Invitations expire after 7 days.</p>
+      <form id="f">
+        <label for="u">GitHub username</label>
+        <input id="u" autocomplete="off" placeholder="e.g. octocat" required maxlength="39" pattern="[A-Za-z0-9\-]+">
+        <label for="e">Their email address <span class="muted">(optional, only used to write a welcome email for you to send)</span></label>
+        <input id="e" type="email" autocomplete="off" placeholder="name@example.com">
+        <p style="margin-top:14px"><button id="go" type="submit">Send invitation</button></p>
+      </form>
+      <div id="result" class="msg" hidden></div>
+    </div>
+    <div class="card"><h2>Waiting to accept</h2><ul id="pending"></ul></div>
+    <div class="card"><h2>Current editors</h2><ul id="people"></ul>
+      <p class="muted" style="margin-top:12px">Editors can change anything in this website's files, not just the text, so invite only people you trust.</p></div>
+  </div>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); };
+  var S = {repo: '', token: '', me: ''};
+  var gh = function (method, path, body) {
+    return fetch('https://api.github.com' + path, {method: method, headers: {Authorization: 'Bearer ' + S.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined})
+      .then(function (r) { return r.status === 204 ? {status: 204} : r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; return j; }); });
+  };
+  var msg = function (cls, html) { var m = $('result'); m.hidden = false; m.className = 'msg ' + cls; m.innerHTML = html; };
+  var gate = function (html) { var g = $('gate'); g.hidden = false; g.innerHTML = html; $('app').hidden = true; };
+  var origin = function () { return location.origin; };
+  function loadLists() {
+    return Promise.all([gh('GET', '/repos/' + S.repo + '/collaborators?affiliation=direct&per_page=100'), gh('GET', '/repos/' + S.repo + '/invitations?per_page=100')]).then(function (r) {
+      var people = Array.isArray(r[0]) ? r[0] : [], inv = Array.isArray(r[1]) ? r[1] : [];
+      $('people').innerHTML = people.length ? people.map(function (p) {
+        var you = p.login.toLowerCase() === S.me.toLowerCase(), owner = p.login.toLowerCase() === S.repo.split('/')[0].toLowerCase();
+        return '<li><span><strong>@' + esc(p.login) + '</strong>' + (owner ? '<span class="tag">owner</span>' : '') + (you ? '<span class="tag">you</span>' : '') + '</span>' + (owner || you ? '' : '<button class="ghost" data-rm="' + esc(p.login) + '">Remove</button>') + '</li>';
+      }).join('') : '<li class="muted">No one yet.</li>';
+      $('pending').innerHTML = inv.length ? inv.map(function (i) { return '<li><span><strong>@' + esc(i.invitee && i.invitee.login) + '</strong><span class="tag">invited</span></span><button class="ghost" data-cancel="' + esc(i.id) + '">Cancel invitation</button></li>'; }).join('') : '<li class="muted">No pending invitations.</li>';
+    });
+  }
+  function welcome(user, email) {
+    var url = origin() + '/babevote/admin/', subject = 'You are invited to edit ' + (S.name || 'the website');
+    var body = 'Hi,\n\nYou have been invited to help edit ' + (S.name || 'our website') + '.\n\n1. Check your email for an invitation from GitHub (or open https://github.com/' + S.repo + '/invitations) and click Accept.\n2. Then go to ' + url + ' and choose "Login with GitHub".\n\nYour GitHub username: @' + user + '\n\nThanks!';
+    return 'mailto:' + encodeURIComponent(email || '') + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  }
+  function init() {
+    var tok = null; try { tok = JSON.parse(localStorage.getItem('decap-cms-user') || 'null'); } catch (e) {}
+    S.token = tok && tok.token || '';
+    return fetch('/babevote/admin/config.yml').then(function (r) { return r.text(); }).then(function (t) {
+      var m = /^\s*repo:\s*(\S+)/m.exec(t); S.repo = m ? m[1] : ''; var su = /^site_url:\s*(\S+)/m.exec(t); S.name = su ? su[1].replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
+      $('site').textContent = S.repo ? 'Website: ' + (S.name || S.repo) : 'Could not read the editor settings.';
+      if (!S.repo) return gate('<p>Could not find which website this belongs to. Open the editor and try again.</p>');
+      if (!S.token) return gate('<p><strong>Sign in first.</strong> Open <a href="/babevote/admin/">the editor</a>, log in with GitHub, then come back to this page.</p>');
+      return gh('GET', '/user').then(function (u) {
+        if (!u.login) return gate('<p>Your sign-in has expired. Open <a href="/babevote/admin/">the editor</a>, log in again, then come back.</p>');
+        S.me = u.login;
+        return gh('GET', '/repos/' + S.repo).then(function (r) {
+          if (!(r.permissions && r.permissions.admin)) return gate('<p>Only the site owner can invite editors. You are signed in as <strong>@' + esc(S.me) + '</strong>. Ask the owner (<strong>@' + esc(S.repo.split('/')[0]) + '</strong>) to do this.</p>');
+          $('gate').hidden = true; $('app').hidden = false; return loadLists();
+        });
+      });
+    });
+  }
+  $('f').addEventListener('submit', function (ev) {
+    ev.preventDefault(); var user = $('u').value.trim().replace(/^@/, ''), email = $('e').value.trim();
+    if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(user)) return msg('err', 'That does not look like a GitHub username.');
+    $('go').disabled = true; msg('', 'Sending…');
+    gh('PUT', '/repos/' + S.repo + '/collaborators/' + encodeURIComponent(user), {permission: 'push'}).then(function (r) {
+      $('go').disabled = false;
+      if (r.status === 201) { msg('ok', '<strong>Invitation sent to @' + esc(user) + '.</strong> GitHub is emailing them now; they need to click Accept.' + (r.html_url ? '' : '') + '<p style="margin:10px 0 0"><a class="btn" href="' + welcome(user, email) + '">Write them a welcome email</a></p>'); $('f').reset(); return loadLists(); }
+      if (r.status === 204) return msg('ok', '@' + esc(user) + ' already has access.');
+      if (r.status === 404) return msg('err', 'GitHub could not find a user named @' + esc(user) + '. Check the spelling.');
+      if (r.status === 403 || r.status === 401) return msg('err', 'GitHub refused. Sign out and back in at the editor, then try again. (' + esc(r.message || r.status) + ')');
+      msg('err', 'Something went wrong: ' + esc(r.message || r.status));
+    });
+  });
+  document.addEventListener('click', function (ev) {
+    var rm = ev.target.getAttribute && ev.target.getAttribute('data-rm'), cancel = ev.target.getAttribute && ev.target.getAttribute('data-cancel');
+    if (rm && confirm('Remove @' + rm + ' as an editor? They will no longer be able to sign in to the editor.')) gh('DELETE', '/repos/' + S.repo + '/collaborators/' + encodeURIComponent(rm)).then(loadLists);
+    if (cancel && confirm('Cancel this invitation?')) gh('DELETE', '/repos/' + S.repo + '/invitations/' + encodeURIComponent(cancel)).then(loadLists);
+  });
+  window.__invite = {init: init};
+  init();
+})();
+</script>
+</body></html>
